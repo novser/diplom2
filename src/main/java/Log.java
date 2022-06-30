@@ -36,8 +36,8 @@ public class Log {
         writeLog(name, String.format(inputMassagePattern, massage.getSender(), massage.getText()));
     }
 
-    public static void writeOutputMassage(String name, Massage massage, boolean itIsServer) {
-        writeLog(name, String.format(outputMassagePattern, itIsServer ? massage.getSender() : "", massage.getText()));
+    public static void writeOutputMassage(String name, Massage massage) {
+        writeLog(name, String.format(outputMassagePattern, massage.getSender(), massage.getText()));
     }
 
     public static void writeError(String name, String error) {

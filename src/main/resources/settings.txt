@@ -1,2 +1,3 @@
 ip : localhost;
 port : 21253;
+buffer : 1024;
