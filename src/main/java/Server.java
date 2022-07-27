@@ -1,55 +1,69 @@
-import java.io.*;
-import java.net.InetSocketAddress;
-import java.nio.ByteBuffer;
-import java.nio.channels.ServerSocketChannel;
-import java.nio.channels.SocketChannel;
-import java.nio.charset.StandardCharsets;
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.io.PrintWriter;
+import java.net.ServerSocket;
+import java.net.Socket;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 public class Server extends Thread {
 
     private final int port;
     private final String ip;
-    private int buffer;
+    private int usersCount;
+    private ExecutorService threadPool = Executors.newFixedThreadPool(usersCount);
     private final String name = "SERVER";
 
-    public Server() {
+    public Server(int usersCount) {
         Map<String, String> settings = Main.getSettings(name);
         this.port = Integer.parseInt(settings.get("port"));
         this.ip = settings.get("ip");
-        this.buffer = Integer.parseInt(settings.get("buffer"));
+        this.usersCount = usersCount;
     }
 
     @Override
     public void run() {
         Log.writeStart(name);
 
-        ServerSocketChannel serverChannel = null;
-        try {
-            serverChannel = ServerSocketChannel.open();
-            serverChannel.bind(new InetSocketAddress(ip, port));
-        } catch (IOException e) {
+        try (ServerSocket servSocket = new ServerSocket(port)) {
+            while (true) {
+                try (Socket socket = servSocket.accept()) {
+                    Runnable connect = new Connect(socket);
+                    Future future = threadPool.submit(connect);
+                    future.get();
+                }
+            }
+        } catch (Exception e) {
             Log.writeError(name, e.getMessage());
         }
+    }
 
-        while (true) {
-            try (SocketChannel socketChannel = serverChannel.accept()) {
-                final ByteBuffer inputBuffer = ByteBuffer.allocate(buffer);
-                while (socketChannel.isConnected()) {
-                    int bytesCount = socketChannel.read(inputBuffer);
-                    if (bytesCount == -1) break;
-                    final String text = new String(inputBuffer.array(), 0, bytesCount, StandardCharsets.UTF_8);
-                    inputBuffer.clear();
-                    Massage massage = JsonHelper.getMassageFromJson(text);
+    private class Connect implements Runnable {
+        volatile Socket socket;
+
+        public Connect(Socket socket) {
+            this.socket = socket;
+        }
+
+        @Override
+        public void run() {
+            try (PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
+                 BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()))) {
+                String line;
+                while ((line = in.readLine()) != null) {
+                    Massage massage = JsonHelper.getMassageFromJson(line);
                     Log.writeInputMassage(name, massage);
-                    socketChannel.write(ByteBuffer.wrap((JsonHelper.getJsonTextFromMassage(massage)).getBytes(StandardCharsets.UTF_8)));
+                    out.println(JsonHelper.getJsonTextFromMassage(massage));
                     Log.writeOutputMassage(name, massage);
+                    if (line.equals("exit")) {
+                        break;
+                    }
                 }
-            } catch (IOException e) {
+            } catch (Exception e) {
                 Log.writeError(name, e.getMessage());
             }
         }
-
     }
 }
-
