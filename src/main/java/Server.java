@@ -54,6 +54,8 @@ public class Server extends Thread {
             }
         } catch (Exception e) {
             Log.writeError(name, e.getMessage());
+        } finally {
+            Log.writeFinish(name);
         }
     }
 }
