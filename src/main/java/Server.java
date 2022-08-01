@@ -4,23 +4,19 @@ import java.io.PrintWriter;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.Map;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
+import java.util.concurrent.*;
 
 public class Server extends Thread {
 
     private final int port;
     private final String ip;
-    private int usersCount;
-    private ExecutorService threadPool = Executors.newFixedThreadPool(usersCount);
     private final String name = "SERVER";
+    private volatile ConcurrentMap<String, StringBuilder> massages = new ConcurrentHashMap();
 
-    public Server(int usersCount) {
+    public Server() {
         Map<String, String> settings = Main.getSettings(name);
         this.port = Integer.parseInt(settings.get("port"));
         this.ip = settings.get("ip");
-        this.usersCount = usersCount;
     }
 
     @Override
@@ -29,41 +25,35 @@ public class Server extends Thread {
 
         try (ServerSocket servSocket = new ServerSocket(port)) {
             while (true) {
-                try (Socket socket = servSocket.accept()) {
-                    Runnable connect = new Connect(socket);
-                    Future future = threadPool.submit(connect);
-                    future.get();
+                try (Socket socket = servSocket.accept();
+                     PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
+                     BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()))) {
+                    String line = in.readLine();
+                    String[] parts = line.split(":");
+                    String userName = parts[0];
+
+                    Log.writeInputMassage(name, parts);
+                    if (line.equals("exit")) {
+                        Log.writeFinish(userName);
+                        break;
+                    }
+
+                    StringBuilder value = massages.get(userName);
+                    if (value == null) {
+                        massages.put(userName, new StringBuilder());
+                        value = massages.get(userName);
+                    }
+                    out.println(value);
+                    Log.writeOutputMassage(name, parts);
+                    massages.forEach((k, v) -> {
+                        if (!k.equals(userName)) {
+                            v.append(line + "\n");
+                        }
+                    });
                 }
             }
         } catch (Exception e) {
             Log.writeError(name, e.getMessage());
-        }
-    }
-
-    private class Connect implements Runnable {
-        volatile Socket socket;
-
-        public Connect(Socket socket) {
-            this.socket = socket;
-        }
-
-        @Override
-        public void run() {
-            try (PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
-                 BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()))) {
-                String line;
-                while ((line = in.readLine()) != null) {
-                    Massage massage = JsonHelper.getMassageFromJson(line);
-                    Log.writeInputMassage(name, massage);
-                    out.println(JsonHelper.getJsonTextFromMassage(massage));
-                    Log.writeOutputMassage(name, massage);
-                    if (line.equals("exit")) {
-                        break;
-                    }
-                }
-            } catch (Exception e) {
-                Log.writeError(name, e.getMessage());
-            }
         }
     }
 }

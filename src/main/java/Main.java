@@ -7,10 +7,10 @@ import java.util.stream.Collectors;
 public class Main {
 
     private static final String settingsPath = "src\\main\\resources\\settings.txt";
-    private static int usersCount = 4;
+//    private static int usersCount = 4;
 
     public static void main(String[] args) {
-        new Server(usersCount).start();
+        new Server().start();
     }
 
     public static Map<String, String> getSettings(String name) {
